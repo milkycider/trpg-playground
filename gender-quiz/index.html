@@ -286,6 +286,7 @@ function makeShareText(ok, byG) {
     "正答率 " + (ok / DATA.length * 100).toFixed(1) + "%(" + ok + "/" + DATA.length + ")",
     GENDERS.map(function (g) { return g + " " + byG[g][1] + "/" + byG[g][0]; }).join(" ")
   ];
+  lines.push("#城原の探索者の性別どっち");
   if (url) lines.push(url);
   return lines.join("\n");
 }
