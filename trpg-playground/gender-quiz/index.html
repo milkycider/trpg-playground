@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>城原の探索者の性別クイズ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Shippori+Mincho:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: sticky bar with progress and fixed hint counts, then one long ledger list; answers are revealed all at once after 答え合わせ */
+:root {
+  --bg: #f3f5f6;
+  --surface: #ffffff;
+  --ink: #1d2830;
+  --muted: #5f6f7a;
+  --line: #d5dce0;
+  --accent: #1f6f78;
+  --accent-ink: #ffffff;
+  --done: #e6f2f1;
+  --good: #1f6f78;
+  --bad: #b4551d;
+  --bad-bg: #fbece2;
+  --font-display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-body: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12191d; --surface: #1b252b; --ink: #e5ecef; --muted: #93a3ad; --line: #2e3c44;
+    --accent: #52b3bd; --accent-ink: #0b1316; --done: #1b2f31; --good: #52b3bd;
+    --bad: #e08a52; --bad-bg: #33241a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12191d; --surface: #1b252b; --ink: #e5ecef; --muted: #93a3ad; --line: #2e3c44;
+  --accent: #52b3bd; --accent-ink: #0b1316; --done: #1b2f31; --good: #52b3bd;
+  --bad: #e08a52; --bad-bg: #33241a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 820px; margin: 0 auto; padding: 0 16px 64px; }
+header.top { padding: 28px 0 12px; }
+h1 { font-family: var(--font-display); font-size: 1.7rem; margin: 0 0 6px; text-wrap: balance; }
+.lead { margin: 0; color: var(--muted); max-width: 65ch; }
+[hidden] { display: none !important; }
+
+button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 6px 12px; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; font-size: .9rem; color: var(--muted); cursor: pointer; }
+
+.bar { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding: 10px 0; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.progress { flex: 1 1 260px; min-width: 220px; }
+.progress .txt { font-size: .85rem; color: var(--muted); font-variant-numeric: tabular-nums; display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; }
+.progress .txt b { color: var(--ink); font-weight: 700; }
+.meter { height: 6px; background: var(--line); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.meter > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.hint { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+.hint li { border: 1px solid var(--line); border-radius: 8px; padding: 2px 10px; background: var(--surface); font-variant-numeric: tabular-nums; font-size: .9rem; }
+.hint b { font-size: 1.05rem; }
+.hint-title { font-size: .8rem; color: var(--muted); }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+#result { scroll-margin-top: 150px; }
+.share { max-width: 520px; margin: 20px auto 0; text-align: left; }
+.share-label { display: block; font-weight: 700; margin-bottom: 6px; }
+.share textarea { width: 100%; font: inherit; line-height: 1.5; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; }
+.share-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.share-row .count { margin-right: auto; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.share-row .count.over { color: var(--bad); font-weight: 700; }
+a.btn { display: inline-block; text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; background: var(--surface); color: var(--ink); }
+a.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+a.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 16px; }
+.score { text-align: center; }
+.score .big { font-family: var(--font-display); font-size: 3rem; line-height: 1.2; }
+.score .pct { color: var(--muted); }
+table.brk { border-collapse: collapse; width: 100%; max-width: 420px; margin: 14px auto 0; font-variant-numeric: tabular-nums; }
+table.brk th, table.brk td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: right; }
+table.brk th:first-child, table.brk td:first-child { text-align: left; }
+
+ol.list { list-style: none; margin: 16px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; }
+.row {
+  display: grid; grid-template-columns: 2.4rem minmax(10rem, 1fr) auto minmax(7.5rem, auto);
+  gap: 8px 12px; align-items: end; padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--line); border-left: 4px solid transparent;
+}
+.row:last-child { border-bottom: 0; }
+.row.done { background: var(--done); border-left-color: var(--accent); }
+.row.ng { background: var(--bad-bg); border-left-color: var(--bad); }
+.row.ok { border-left-color: var(--good); }
+.no { text-align: right; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; padding-bottom: 6px; }
+.who { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.part { display: flex; flex-direction: column; align-items: center; min-width: 2.2rem; }
+.rd { font-size: .74rem; color: var(--muted); line-height: 1.4; min-height: 1.04rem; }
+.nm { font-size: 1.15rem; font-weight: 500; overflow-wrap: anywhere; }
+.g { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.g button { border: 0; border-radius: 0; padding: 6px 14px; background: var(--surface); min-width: 3rem; }
+.g button + button { border-left: 1px solid var(--line); }
+.g button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.g button:disabled { cursor: default; }
+.g button.right { box-shadow: inset 0 0 0 2px var(--good); }
+.g button[aria-pressed="true"].wrong { background: var(--bad); color: #fff; }
+.res { font-weight: 700; padding-bottom: 6px; font-size: .9rem; }
+.res.ok { color: var(--good); }
+.res.ng { color: var(--bad); }
+.note { color: var(--muted); font-size: .85rem; margin-top: 10px; }
+@media (max-width: 680px) {
+  .row { grid-template-columns: 2rem 1fr; grid-template-areas: "no who" ". g" ". res"; align-items: center; }
+  .no { grid-area: no; align-self: start; padding-top: 18px; }
+  .who { grid-area: who; }
+  .g { grid-area: g; justify-self: start; }
+  .res { grid-area: res; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .meter > i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>城原の探索者の性別どっちでしょう？</h1>
+    <p class="lead">日本人の探索者を名前の読み順に並べています。男・女・不明のボタンで全員ぶん答えて、最後に「答え合わせ」を押すと、答えと正答率が出ます。</p>
+  </header>
+
+  <div class="bar">
+    <div class="progress" aria-live="polite">
+      <div class="txt"><span>回答 <b id="ans">0</b> / <b id="tot">0</b></span><span class="hint-title">ヒント: 全員の人数</span></div>
+      <div class="meter"><i id="meter"></i></div>
+      <ul class="hint" id="hint"></ul>
+    </div>
+    <div class="tools">
+      <label class="chk"><input type="checkbox" id="only"> <span id="onlyLabel">未回答だけ表示</span></label>
+      <button type="button" id="grade" class="primary">答え合わせ</button>
+      <button type="button" id="reset">最初からやり直す</button>
+    </div>
+  </div>
+
+  <section class="card" id="result" hidden>
+    <div class="score">
+      <p class="pct" style="margin:0">結果</p>
+      <div class="big" id="rScore"></div>
+      <div class="pct" id="rPct"></div>
+    </div>
+    <table class="brk" aria-label="性別ごとの正解数">
+      <thead><tr><th>正解の性別</th><th>人数</th><th>正解</th></tr></thead>
+      <tbody id="brk"></tbody>
+    </table>
+    <div class="share">
+      <label for="shareText" class="share-label">Xに共有(文章は書き換えられます)</label>
+      <textarea id="shareText" rows="5"></textarea>
+      <div class="share-row">
+        <span class="count" id="shareCount" aria-live="polite"></span>
+        <button type="button" id="copyShare">文章をコピー</button>
+        <a class="btn primary" id="postX" href="https://x.com/intent/post" target="_blank" rel="noopener noreferrer">Xでポストする</a>
+      </div>
+      <p class="note" id="shareNote"></p>
+    </div>
+  </section>
+
+  <ol class="list" id="list"></ol>
+  <p class="note" id="status"></p>
+</div>
+
+<script>
+// [区分(0=日本人), 苗字, 名, ミドルネーム, 苗字の読み, 名の読み, ミドルネームの読み, 性別]
+var DATA = [[0,"饗庭","美之","","あいば","みゆき","","男"],[0,"阿食","祥","","あじき","しょう","","男"],[0,"明日見","始","","あすみ","はじめ","","男"],[0,"天久","凪沙","","あまく","なぎさ","","男"],[0,"新出","勝也","","あらいで","かつや","","男"],[0,"荒絹","帷","","あらぎぬ","とばり","","男"],[0,"壱岐","真緒香","","いき","ましょか","","男"],[0,"五十鈴","うずめ","","いすず","うずめ","","女"],[0,"伊蘇","トーマ","","いそ","とーま","","不明"],[0,"一条","隆","","いちじょう","たかし","","男"],[0,"市原","光一","","いちはら","こういち","","男"],[0,"犬丸","禎助","","いぬまる","ていすけ","","男"],[0,"巌","一葉","","いわお","かずは","","女"],[0,"魚住","ユウタ","","うおずみ","ゆうた","","男"],[0,"宇賀神","献","","うがじん","こん","","男"],[0,"宇宙","風雅","","うちゅう","ふうが","","男"],[0,"歌生","階","","うとう","かい","","男"],[0,"榎本","鈴彦","","えのもと","すずひこ","","男"],[0,"王城","美兎","","おうしろ","みう","","女"],[0,"近江","哲也","","おうみ","てつや","","男"],[0,"荻野","浩二","","おぎの","こうじ","","男"],[0,"越生","幸","","おごせ","こう","","男"],[0,"鴦野","光風","","おしの","みつかぜ","","男"],[0,"織田","和則","","おだ","かずのり","","男"],[0,"小友","究","","おとも","きゅう","","男"],[0,"荊棘路","トーカ","","おどろじ","とーか","","男"],[0,"荊棘路","ネフ","","おどろじ","ねふ","","男"],[0,"鬼丸","寛司","","おにまる","かんじ","","不明"],[0,"面迫","月","","おもさこ","るの","","男"],[0,"折紙","ノワ","","おりがみ","のわ","","男"],[0,"歸山","一冴","","かえりやま","いっさ","","男"],[0,"霞流","辰","","かすばた","しん","","男"],[0,"加勢","倫悟","","かせ","りんご","","男"],[0,"片見","竜生","","かたみ","たつき","","男"],[0,"兼謝名","れるれ","","かねじゃな","れるれ","","男"],[0,"神山","成実","","かみやま","なるみ","","男"],[0,"賀谷","達美","","かや","たつみ","","女"],[0,"神吉","庵治那","","かんき","あじな","","女"],[0,"観堂","解","","かんとう","かい","","男"],[0,"環貫","椋","","かんぬき","りょう","","男"],[0,"神辺","由利夫","","かんべ","ゆりお","","男"],[0,"菊一","文字","","きくいち","ぶんじ","","男"],[0,"橘川","マコト","","きっかわ","まこと","","男"],[0,"鬼頭","魁","","きとう","かい","","男"],[0,"紀ノ上","檀","","きのかみ","まゆみ","","男"],[0,"貴船","晴澄","","きふね","はるきよ","","男"],[0,"吉良","ミハイル","","きら","みはいる","","男"],[0,"冒","芳一","","くちなし","ほういち","","不明"],[0,"久遠","怪","","くとう","かい","","男"],[0,"救仁郷","ルイ","","くにごう","るい","","男"],[0,"剣持","由高","","けんもち","ゆたか","","男"],[0,"小鳥谷","慎","","こずや","しん","","男"],[0,"小高","佳月","","こたか","かづき","","男"],[0,"此永","正治","","このなが","まさはる","","男"],[0,"斎藤","福伸","","さいとう","ふくしん","","男"],[0,"西能","藤吉","","さいのう","ふじよし","","男"],[0,"相良","喜助","","さがら","きすけ","","男"],[0,"佐久間","希","","さくま","のぞむ","","男"],[0,"流石","巧","","さすが","たくみ","","男"],[0,"佐野","冥介","","さの","めいすけ","","男"],[0,"椎葉","真夏","","しいば","まなつ","","男"],[0,"椎葉","宵宮","","しいば","よみや","","男"],[0,"真路","清司","","しころ","せいじ","","男"],[0,"宍道","勇次郎","","ししどう","ゆうじろう","","男"],[0,"地代","由々緒","","じだい","ゆゆお","","男"],[0,"設楽","百済","","したら","くだら","","男"],[0,"四島","海","","しとう","かい","","男"],[0,"四ノ宮","律","","しのみや","りつ","","男"],[0,"白石","譲","","しらいし","ゆずり","","女"],[0,"進藤","征之","","しんどう","ゆきの","","男"],[0,"須藤","快","","すとう","かい","","男"],[0,"清納","ミコト","","せいのう","みこと","","男"],[0,"関根","圭人","","せきね","けいと","","男"],[0,"","鶺鴒","","","せきれい","","男"],[0,"世良","来世","","せら","らいせ","","男"],[0,"苑田","夢露太","","そのだ","めろた","","男"],[0,"宗和","瑛二","","そわ","えいじ","","男"],[0,"大坊","克己","","だいぼう","かつき","","男"],[0,"高居","椎奈","","たかい","しいな","","女"],[0,"髙木","括","","たかぎ","くくる","","男"],[0,"高野","真咲","","たかの","まさき","","男"],[0,"高嶺","柊一","","たかみね","しゅういち","","男"],[0,"瀧口","克","","たきぐち","かつみ","","男"],[0,"丹治","奮","","たじ","ふるう","","男"],[0,"多々良","運","","ただよし","かず","","男"],[0,"楯列","基広","","たてなみ","もとひろ","","男"],[0,"谷山","祟","","たにやま","たたり","","男"],[0,"田淵","玄","","たぶち","げん","","男"],[0,"常見","利光","","つねみ","としみつ","","男"],[0,"津覇","未来","","つは","みらい","","男"],[0,"","大赦","","","つみゆるし","","男"],[0,"勅使河原","成緒","","てしがわら","なるお","","男"],[0,"天道","慈","","てんどう","うつみ","","男"],[0,"藤平","茉莉","","とうへい","まつり","","男"],[0,"栂野","八飯","","とがの","やい","","男"],[0,"内藤","快","","ないとう","かい","","男"],[0,"名生","結里花","","なお","ゆりか","","男"],[0,"永井","宇宙","","ながい","そら","","男"],[0,"緧","修進","","ながえや","しゅうしん","","男"],[0,"仲地","涯","","なかち","がい","","男"],[0,"七尾","新世","","ななお","あらよ","","男"],[0,"波留","れいや","","なみどめ","れいや","","女"],[0,"鳴海","珠恩","","なるみ","しゅおん","","女"],[0,"新田","雀","","にった","すずめ","","男"],[0,"新田","燕","","にった","つばめ","","男"],[0,"似内","清楚","","にない","せいそ","","男"],[0,"迫間","零有","","はざま","あゆ","","女"],[0,"初瀬","三児","","はせ","さんじ","","男"],[0,"八尾","小真由","","はちお","こまゆ","","女"],[0,"廿日","暮平","","はつか","くれひら","","男"],[0,"花折","仰青","","はなおり","こうせい","","男"],[0,"花野井","紺","","はなのい","こん","","男"],[0,"早川","慧","","はやかわ","けい","","女"],[0,"春川","一幸","","はるかわ","かずゆき","","男"],[0,"春田","","","はるた","","","男"],[0,"春芳","美影","","はるよし","みかげ","","女"],[0,"日向野","豪","","ひがの","ごう","","男"],[0,"樋口","加奈恵","","ひぐち","かなえ","","男"],[0,"日野","裕介","","ひの","ゆうすけ","","男"],[0,"日比野","涼","","ひびの","りょう","","女"],[0,"平体","恵","","ひらたい","めぐみ","","男"],[0,"福住","心","","ふくずみ","こころ","","女"],[0,"藤","亮太","","ふじ","りょうた","","男"],[0,"伏木","類","","ふしぎ","るい","","男"],[0,"藤原","鈴鹿","","ふじわら","りんか","","男"],[0,"冬樹","","","ふゆき","","","男"],[0,"降幡","白楊","","ふりはた","はくよう","","男"],[0,"古谷","れい","","ふるや","れい","","女"],[0,"星野","要","","ほしの","かなめ","","男"],[0,"星野","司","","ほしの","つかさ","","男"],[0,"星野","実","","ほしの","みのる","","男"],[0,"本間","幽良","","ほんま","ゆら","","女"],[0,"前泊","淳","","まえどまり","じゅん","","女"],[0,"真継","銘々","","まつぐ","めいめい","","男"],[0,"松田","貴一","","まつだ","きいち","","男"],[0,"松田","秀治","","まつだ","しゅうじ","","男"],[0,"参河","鳴明","","みかわ","なるあき","","男"],[0,"水菓子","吉祥","","みずがし","よしあき","","男"],[0,"美園","太郎","","みその","たろう","","男"],[0,"御嶽","照慈","","みたけ","てるちか","","男"],[0,"水落","往来","","みづち","おうらい","","男"],[0,"皆川","桐人","","みながわ","きりひと","","男"],[0,"美濃","一生","","みの","いっせい","","男"],[0,"娶得","皆","","めとう","かい","","男"],[0,"最首","天一郎","","もくび","あまいちろう","","男"],[0,"八木川","真生","","やぎがわ","まお","","不明"],[0,"夜久","満","","やく","みちる","","女"],[0,"山崎","通","","やまさき","とおる","","女"],[0,"山来","明星","","やまらい","みほ","","女"],[0,"夢路","紘","","ゆめじ","ひろ","","男"],[0,"好蔵","睦","","よしくら","むつみ","","男"],[0,"吉田","わゐ子","","よしだ","わいこ","","女"],[0,"吉原","タツキ","","よしはら","たつき","","男"],[0,"龍池","要太","","りゅうち","ようた","","男"],[0,"粱","香芳","","りょう","きょうほう","","男"],[0,"吾妻","カトリ","","わがつま","かとり","","男"]];
+var GENDERS = ["男", "女", "不明"];
+var KEY = "seibetsu-quiz-answers-v1";
+var answers = [];   // index -> "男" | "女" | "不明" | ""
+var graded = false;
+var rowEls = [];
+
+function $(id) { return document.getElementById(id); }
+function parts(d) {
+  var p = d[0] === 1 ? [[d[2], d[5]], [d[3], d[6]], [d[1], d[4]]] : [[d[1], d[4]], [d[2], d[5]]];
+  return p.filter(function (x) { return x[0]; });
+}
+function countGender(list) {
+  var c = { "男": 0, "女": 0, "不明": 0 };
+  list.forEach(function (d) { c[d[7]]++; });
+  return c;
+}
+function load() {
+  try { var a = JSON.parse(localStorage.getItem(KEY) || "[]"); if (a.length === DATA.length) return a; } catch (e) {}
+  return DATA.map(function () { return ""; });
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(answers)); } catch (e) {} }
+
+function build() {
+  var ul = $("list"); ul.innerHTML = ""; rowEls = [];
+  DATA.forEach(function (d, i) {
+    var li = document.createElement("li"); li.className = "row";
+    var no = document.createElement("span"); no.className = "no"; no.textContent = i + 1;
+    var who = document.createElement("div"); who.className = "who";
+    var label = "";
+    parts(d).forEach(function (x) {
+      var p = document.createElement("div"); p.className = "part";
+      var r = document.createElement("span"); r.className = "rd"; r.textContent = x[1];
+      var n = document.createElement("span"); n.className = "nm"; n.textContent = x[0];
+      p.appendChild(r); p.appendChild(n); who.appendChild(p);
+      label += x[0] + " ";
+    });
+    var g = document.createElement("div"); g.className = "g"; g.setAttribute("role", "group");
+    g.setAttribute("aria-label", label.trim() + " の性別");
+    GENDERS.forEach(function (name) {
+      var b = document.createElement("button"); b.type = "button"; b.textContent = name; b.dataset.g = name;
+      b.addEventListener("click", function () {
+        if (graded) return;
+        answers[i] = answers[i] === name ? "" : name;
+        save(); paintRow(i); updateCounts();
+      });
+      g.appendChild(b);
+    });
+    var res = document.createElement("span"); res.className = "res";
+    li.appendChild(no); li.appendChild(who); li.appendChild(g); li.appendChild(res);
+    ul.appendChild(li);
+    rowEls.push({ li: li, g: g, res: res });
+  });
+}
+
+function paintRow(i) {
+  var e = rowEls[i], a = answers[i], d = DATA[i];
+  e.li.className = "row" + (graded ? (a === d[7] ? " ok" : " ng") : (a ? " done" : ""));
+  Array.prototype.forEach.call(e.g.children, function (b) {
+    var n = b.dataset.g;
+    b.setAttribute("aria-pressed", a === n ? "true" : "false");
+    b.disabled = graded;
+    b.className = "";
+    if (graded) {
+      if (n === d[7]) b.classList.add("right");
+      else if (n === a) b.classList.add("wrong");
+    }
+  });
+  e.res.className = "res"; e.res.textContent = "";
+  if (graded) {
+    if (a === d[7]) { e.res.className = "res ok"; e.res.textContent = "正解"; }
+    else { e.res.className = "res ng"; e.res.textContent = (a ? "不正解" : "未回答") + " 答え: " + d[7]; }
+  }
+}
+
+function updateCounts() {
+  var n = answers.filter(function (a) { return a; }).length;
+  $("ans").textContent = n;
+  $("tot").textContent = DATA.length;
+  $("meter").style.width = (n / DATA.length * 100) + "%";
+  $("grade").textContent = !graded && n < DATA.length ? "答え合わせ(未回答 " + (DATA.length - n) + ")" : "答え合わせ";
+}
+
+function applyFilter() {
+  var only = $("only").checked;
+  rowEls.forEach(function (e, i) {
+    var show = true;
+    if (only) show = graded ? answers[i] !== DATA[i][7] : !answers[i];
+    e.li.hidden = !show;
+  });
+}
+
+function weighted(text) {
+  var s = text.replace(/https?:\/\/\S+/g, "xxxxxxxxxxxxxxxxxxxxxxx"), w = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    w += (c <= 0x10ff || (c >= 0x2000 && c <= 0x200d) || (c >= 0x2010 && c <= 0x201f) || (c >= 0x2032 && c <= 0x2037)) ? 1 : 2;
+  }
+  return w;
+}
+function pageUrl() {
+  try { if (/^https?:$/.test(location.protocol)) return location.origin + location.pathname; } catch (e) {}
+  return "";
+}
+function updateShare() {
+  var ta = $("shareText"), text = ta.value, w = weighted(text);
+  var c = $("shareCount");
+  c.textContent = "文字数 " + w + " / 280";
+  c.className = "count" + (w > 280 ? " over" : "");
+  $("postX").href = "https://x.com/intent/post?text=" + encodeURIComponent(text);
+  $("shareNote").textContent = w > 280 ? "280を超えています。短くするとポストできます。" : "";
+}
+function makeShareText(ok, byG) {
+  var url = pageUrl();
+  var lines = [
+    "城原の探索者の性別どっちでしょう？",
+    "正答率 " + (ok / DATA.length * 100).toFixed(1) + "%(" + ok + "/" + DATA.length + ")",
+    GENDERS.map(function (g) { return g + " " + byG[g][1] + "/" + byG[g][0]; }).join(" ")
+  ];
+  if (url) lines.push(url);
+  return lines.join("\n");
+}
+
+function doGrade() {
+  graded = true;
+  var ok = 0, byG = { "男": [0, 0], "女": [0, 0], "不明": [0, 0] }, blank = 0;
+  DATA.forEach(function (d, i) {
+    byG[d[7]][0]++;
+    if (answers[i] === d[7]) { ok++; byG[d[7]][1]++; }
+    if (!answers[i]) blank++;
+    paintRow(i);
+  });
+  $("rScore").textContent = ok + " / " + DATA.length;
+  $("rPct").textContent = "正答率 " + (ok / DATA.length * 100).toFixed(1) + "%" + (blank ? "(未回答 " + blank + "人は不正解として数えています)" : "");
+  var tb = $("brk"); tb.innerHTML = "";
+  GENDERS.forEach(function (g) {
+    var tr = document.createElement("tr");
+    [g, byG[g][0], byG[g][1]].forEach(function (v, i) {
+      var c = document.createElement(i ? "td" : "th"); c.textContent = v; tr.appendChild(c);
+    });
+    tb.appendChild(tr);
+  });
+  $("shareText").value = makeShareText(ok, byG);
+  updateShare();
+  $("result").hidden = false;
+  $("grade").hidden = true;
+  $("onlyLabel").textContent = "間違えた人だけ表示";
+  $("only").checked = false;
+  applyFilter(); updateCounts();
+  $("result").scrollIntoView({ block: "start" });
+}
+
+function doReset() {
+  graded = false;
+  answers = DATA.map(function () { return ""; });
+  save();
+  $("result").hidden = true; $("grade").hidden = false;
+  $("onlyLabel").textContent = "未回答だけ表示";
+  $("only").checked = false;
+  DATA.forEach(function (d, i) { paintRow(i); });
+  applyFilter(); updateCounts();
+  window.scrollTo(0, 0);
+}
+
+$("only").addEventListener("change", applyFilter);
+$("shareText").addEventListener("input", updateShare);
+$("copyShare").addEventListener("click", function () {
+  var ta = $("shareText"), note = $("shareNote");
+  var fail = function () { ta.focus(); ta.select(); note.textContent = "自動でコピーできませんでした。選択した文章をコピーしてください。"; };
+  try { navigator.clipboard.writeText(ta.value).then(function () { note.textContent = "コピーしました。"; }, fail); } catch (e) { fail(); }
+});
+$("grade").addEventListener("click", doGrade);
+$("reset").addEventListener("click", doReset);
+window.addEventListener("error", function (e) {
+  var st = $("status");
+  if (st) st.textContent = "エラー: " + e.message;
+});
+
+(function () {
+  var c = countGender(DATA), h = $("hint");
+  ["男", "女", "不明"].forEach(function (g) {
+    var li = document.createElement("li");
+    var b = document.createElement("b"); b.textContent = c[g];
+    li.appendChild(document.createTextNode(g + " ")); li.appendChild(b); li.appendChild(document.createTextNode("人"));
+    h.appendChild(li);
+  });
+  answers = load();
+  build();
+  DATA.forEach(function (d, i) { paintRow(i); });
+  updateCounts();
+})();
+</script>
+</body>
+</html>
