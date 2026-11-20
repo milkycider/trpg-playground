@@ -66,6 +66,15 @@ label.chk { display: inline-flex; gap: 6px; align-items: center; font-size: .9re
 .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
 #result { scroll-margin-top: 150px; }
+.share { max-width: 520px; margin: 20px auto 0; text-align: left; }
+.share-label { display: block; font-weight: 700; margin-bottom: 6px; }
+.share textarea { width: 100%; font: inherit; line-height: 1.5; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; }
+.share-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.share-row .count { margin-right: auto; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.share-row .count.over { color: var(--bad); font-weight: 700; }
+a.btn { display: inline-block; text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; background: var(--surface); color: var(--ink); }
+a.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+a.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 16px; }
 .score { text-align: center; }
 .score .big { font-family: var(--font-display); font-size: 3rem; line-height: 1.2; }
@@ -140,6 +149,16 @@ ol.list { list-style: none; margin: 16px 0 0; padding: 0; border: 1px solid var(
       <thead><tr><th>正解の性別</th><th>人数</th><th>正解</th></tr></thead>
       <tbody id="brk"></tbody>
     </table>
+    <div class="share">
+      <label for="shareText" class="share-label">Xに共有(文章は書き換えられます)</label>
+      <textarea id="shareText" rows="5"></textarea>
+      <div class="share-row">
+        <span class="count" id="shareCount" aria-live="polite"></span>
+        <button type="button" id="copyShare">文章をコピー</button>
+        <a class="btn primary" id="postX" href="https://x.com/intent/post" target="_blank" rel="noopener noreferrer">Xでポストする</a>
+      </div>
+      <p class="note" id="shareNote"></p>
+    </div>
   </section>
 
   <ol class="list" id="list"></ol>
@@ -240,6 +259,37 @@ function applyFilter() {
   });
 }
 
+function weighted(text) {
+  var s = text.replace(/https?:\/\/\S+/g, "xxxxxxxxxxxxxxxxxxxxxxx"), w = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    w += (c <= 0x10ff || (c >= 0x2000 && c <= 0x200d) || (c >= 0x2010 && c <= 0x201f) || (c >= 0x2032 && c <= 0x2037)) ? 1 : 2;
+  }
+  return w;
+}
+function pageUrl() {
+  try { if (/^https?:$/.test(location.protocol)) return location.origin + location.pathname; } catch (e) {}
+  return "";
+}
+function updateShare() {
+  var ta = $("shareText"), text = ta.value, w = weighted(text);
+  var c = $("shareCount");
+  c.textContent = "文字数 " + w + " / 280";
+  c.className = "count" + (w > 280 ? " over" : "");
+  $("postX").href = "https://x.com/intent/post?text=" + encodeURIComponent(text);
+  $("shareNote").textContent = w > 280 ? "280を超えています。短くするとポストできます。" : "";
+}
+function makeShareText(ok, byG) {
+  var url = pageUrl();
+  var lines = [
+    "城原の探索者の性別どっちでしょう？",
+    "正答率 " + (ok / DATA.length * 100).toFixed(1) + "%(" + ok + "/" + DATA.length + ")",
+    GENDERS.map(function (g) { return g + " " + byG[g][1] + "/" + byG[g][0]; }).join(" ")
+  ];
+  if (url) lines.push(url);
+  return lines.join("\n");
+}
+
 function doGrade() {
   graded = true;
   var ok = 0, byG = { "男": [0, 0], "女": [0, 0], "不明": [0, 0] }, blank = 0;
@@ -259,6 +309,8 @@ function doGrade() {
     });
     tb.appendChild(tr);
   });
+  $("shareText").value = makeShareText(ok, byG);
+  updateShare();
   $("result").hidden = false;
   $("grade").hidden = true;
   $("onlyLabel").textContent = "間違えた人だけ表示";
@@ -280,6 +332,12 @@ function doReset() {
 }
 
 $("only").addEventListener("change", applyFilter);
+$("shareText").addEventListener("input", updateShare);
+$("copyShare").addEventListener("click", function () {
+  var ta = $("shareText"), note = $("shareNote");
+  var fail = function () { ta.focus(); ta.select(); note.textContent = "自動でコピーできませんでした。選択した文章をコピーしてください。"; };
+  try { navigator.clipboard.writeText(ta.value).then(function () { note.textContent = "コピーしました。"; }, fail); } catch (e) { fail(); }
+});
 $("grade").addEventListener("click", doGrade);
 $("reset").addEventListener("click", doReset);
 window.addEventListener("error", function (e) {
