@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>性別クイズ 回答集計</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Shippori+Mincho:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: sign-in gate, then a summary line, the per-character table (hardest first) and the respondent list */
+:root {
+  --bg: #f3f5f6; --surface: #ffffff; --ink: #1d2830; --muted: #5f6f7a; --line: #d5dce0;
+  --accent: #1f6f78; --accent-ink: #ffffff; --bad: #b4551d;
+  --font-display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --font-body: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #12191d; --surface: #1b252b; --ink: #e5ecef; --muted: #93a3ad; --line: #2e3c44; --accent: #52b3bd; --accent-ink: #0b1316; --bad: #e08a52; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #12191d; --surface: #1b252b; --ink: #e5ecef; --muted: #93a3ad; --line: #2e3c44; --accent: #52b3bd; --accent-ink: #0b1316; --bad: #e08a52; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 900px; margin: 0 auto; padding: 0 16px 64px; }
+header { padding: 28px 0 8px; }
+h1 { font-family: var(--font-display); font-size: 1.6rem; margin: 0 0 6px; }
+h2 { font-family: var(--font-display); font-size: 1.2rem; margin: 28px 0 8px; }
+.lead, .note { color: var(--muted); margin: 0; }
+.err { color: var(--bad); font-weight: 700; }
+[hidden] { display: none !important; }
+button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 6px 12px; }
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 12px; }
+.sum { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.sum li { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; font-variant-numeric: tabular-nums; }
+.sum b { font-size: 1.3rem; }
+.scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { font-size: .8rem; color: var(--muted); font-weight: 500; white-space: nowrap; }
+td.n, th.n { text-align: right; }
+tr:last-child td { border-bottom: 0; }
+details summary { cursor: pointer; color: var(--accent); }
+details ul { margin: 6px 0 0; padding-left: 1.2em; }
+.rate { display: inline-block; height: 6px; background: var(--accent); border-radius: 3px; vertical-align: middle; margin-left: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>性別クイズ 回答集計</h1>
+    <p class="lead">管理用のページです。Googleでログインすると、送られた回答を見られます。</p>
+  </header>
+  <div class="bar">
+    <button type="button" class="primary" id="signin">Googleでログイン</button>
+    <button type="button" id="signout" hidden>ログアウト</button>
+    <button type="button" id="reload" hidden>再読み込み</button>
+    <button type="button" id="copy" hidden>回答一覧をコピー(表計算用)</button>
+    <span id="who" class="note"></span>
+  </div>
+  <p id="msg" class="note" style="margin-top:12px"></p>
+
+  <div id="out" hidden>
+    <ul class="sum" id="sum"></ul>
+    <h2>キャラごとの正答率(低い順)</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>キャラ</th><th>正解の性別</th><th class="n">正解</th><th>正答率</th><th>誤答の内訳</th></tr></thead>
+      <tbody id="byChar"></tbody>
+    </table></div>
+    <h2>回答者ごと(新しい順)</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>日時</th><th>ニックネーム</th><th class="n">正解</th><th>間違えたキャラ</th></tr></thead>
+      <tbody id="byUser"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<script src="../firebase-config.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+// 正解(クイズ本体のデータと同じ)
+const KEY = {"饗庭 美之":"男","阿食 祥":"男","明日見 始":"男","天久 凪沙":"男","新出 勝也":"男","荒絹 帷":"男","壱岐 真緒香":"男","五十鈴 うずめ":"女","伊蘇 トーマ":"不明","一条 隆":"男","市原 光一":"男","犬丸 禎助":"男","巌 一葉":"女","魚住 ユウタ":"男","宇賀神 献":"男","宇宙 風雅":"男","歌生 階":"男","榎本 鈴彦":"男","王城 美兎":"女","近江 哲也":"男","荻野 浩二":"男","越生 幸":"男","鴦野 光風":"男","織田 和則":"男","小友 究":"男","荊棘路 トーカ":"男","荊棘路 ネフ":"男","鬼丸 寛司":"不明","面迫 月":"男","折紙 ノワ":"男","歸山 一冴":"男","霞流 辰":"男","加勢 倫悟":"男","片見 竜生":"男","兼謝名 れるれ":"男","神山 成実":"男","賀谷 達美":"女","神吉 庵治那":"女","観堂 解":"男","環貫 椋":"男","神辺 由利夫":"男","菊一 文字":"男","橘川 マコト":"男","鬼頭 魁":"男","紀ノ上 檀":"男","貴船 晴澄":"男","吉良 ミハイル":"男","冒 芳一":"不明","久遠 怪":"男","救仁郷 ルイ":"男","剣持 由高":"男","小鳥谷 慎":"男","小高 佳月":"男","此永 正治":"男","斎藤 福伸":"男","西能 藤吉":"男","相良 喜助":"男","佐久間 希":"男","流石 巧":"男","佐野 冥介":"男","椎葉 真夏":"男","椎葉 宵宮":"男","真路 清司":"男","宍道 勇次郎":"男","地代 由々緒":"男","設楽 百済":"男","四島 海":"男","四ノ宮 律":"男","白石 譲":"女","進藤 征之":"男","須藤 快":"男","清納 ミコト":"男","関根 圭人":"男","鶺鴒":"男","世良 来世":"男","苑田 夢露太":"男","宗和 瑛二":"男","大坊 克己":"男","高居 椎奈":"女","髙木 括":"男","高野 真咲":"男","高嶺 柊一":"男","瀧口 克":"男","丹治 奮":"男","多々良 運":"男","楯列 基広":"男","谷山 祟":"男","田淵 玄":"男","常見 利光":"男","津覇 未来":"男","大赦":"男","勅使河原 成緒":"男","天道 慈":"男","藤代 純善":"男","藤平 茉莉":"男","栂野 八飯":"男","内藤 快":"男","名生 結里花":"男","永井 宇宙":"男","緧 修進":"男","仲地 涯":"男","七尾 新世":"男","波留 れいや":"女","鳴海 珠恩":"女","新田 雀":"男","新田 燕":"男","似内 清楚":"男","迫間 零有":"女","初瀬 三児":"男","八尾 小真由":"女","廿日 暮平":"男","花折 仰青":"男","花野井 紺":"男","早川 慧":"女","春川 一幸":"男","春田":"男","春芳 美影":"女","日向野 豪":"男","樋口 加奈恵":"男","日野 裕介":"男","日比野 涼":"女","平体 恵":"男","福住 心":"女","藤 亮太":"男","伏木 類":"男","藤原 鈴鹿":"男","冬樹":"男","降幡 白楊":"男","古谷 れい":"不明","星野 要":"男","星野 司":"男","星野 実":"男","本間 幽良":"女","前泊 淳":"女","真継 銘々":"男","松田 貴一":"男","松田 秀治":"男","参河 鳴明":"男","水菓子 吉祥":"男","美園 太郎":"男","御嶽 照慈":"男","水落 往来":"男","皆川 桐人":"男","美濃 一生":"男","娶得 皆":"男","最首 天一郎":"男","八木川 真生":"不明","夜久 満":"女","山崎 通":"女","山来 明星":"女","夢路 紘":"男","好蔵 睦":"男","吉田 わゐ子":"女","吉原 タツキ":"男","龍池 要太":"男","粱 香芳":"男","吾妻 カトリ":"男"};
+const NAMES = Object.keys(KEY);
+const $ = (id) => document.getElementById(id);
+const msg = (t, isErr) => { $("msg").textContent = t; $("msg").className = isErr ? "note err" : "note"; };
+
+const cfg = window.FIREBASE_CONFIG;
+let docs = [];
+
+if (!cfg) {
+  $("signin").hidden = true;
+  msg("firebase-config.js に Firebase の設定がありません。設定を貼ってから開き直してください。", true);
+} else {
+  const app = initializeApp(cfg);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  $("signin").addEventListener("click", () => {
+    signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => msg("ログインできませんでした: " + (e.code || e.message), true));
+  });
+  $("signout").addEventListener("click", () => signOut(auth));
+  $("reload").addEventListener("click", load);
+
+  onAuthStateChanged(auth, (user) => {
+    $("signin").hidden = !!user;
+    $("signout").hidden = !user;
+    $("reload").hidden = !user;
+    $("who").textContent = user ? user.email : "";
+    $("out").hidden = true; $("copy").hidden = true;
+    if (user) load(); else msg("ログインしてください。");
+  });
+
+  async function load() {
+    msg("読み込み中...");
+    try {
+      const snap = await getDocs(query(collection(db, "genderQuizResponses"), orderBy("createdAt", "desc"), limit(1000)));
+      docs = snap.docs.map((d) => d.data());
+      render();
+      msg(docs.length ? "" : "まだ回答が届いていません。");
+    } catch (e) {
+      $("out").hidden = true;
+      msg(e.code === "permission-denied" ? "このアカウントには閲覧する権限がありません。ルールに書いたメールアドレスのアカウントでログインしてください。" : "読み込めませんでした: " + (e.code || e.message), true);
+    }
+  }
+}
+
+function scoreOf(a) { return NAMES.filter((n) => a[n] === KEY[n]).length; }
+
+function render() {
+  const total = NAMES.length;
+  const scores = docs.map((d) => scoreOf(d.a || {}));
+  const avg = docs.length ? scores.reduce((x, y) => x + y, 0) / docs.length / total : 0;
+  const sum = $("sum"); sum.innerHTML = "";
+  [["回答者", docs.length + "人"], ["平均正答率", (avg * 100).toFixed(1) + "%"], ["最高", docs.length ? Math.max(...scores) + "/" + total : "-"], ["最低", docs.length ? Math.min(...scores) + "/" + total : "-"]].forEach(([k, v]) => {
+    const li = document.createElement("li");
+    li.append(k + " ");
+    const b = document.createElement("b"); b.textContent = v; li.append(b);
+    sum.append(li);
+  });
+
+  const rows = NAMES.map((n) => {
+    const wrong = {};
+    let ok = 0;
+    docs.forEach((d) => {
+      const a = (d.a || {})[n] || "";
+      if (a === KEY[n]) ok++; else wrong[a || "未回答"] = (wrong[a || "未回答"] || 0) + 1;
+    });
+    return { n, ok, rate: docs.length ? ok / docs.length : 0, wrong };
+  }).sort((x, y) => x.rate - y.rate || x.n.localeCompare(y.n, "ja"));
+  const bc = $("byChar"); bc.innerHTML = "";
+  rows.forEach((r) => {
+    const tr = document.createElement("tr");
+    const c = [r.n, KEY[r.n], r.ok + "/" + docs.length];
+    c.forEach((v, i) => { const td = document.createElement("td"); if (i === 2) td.className = "n"; td.textContent = v; tr.append(td); });
+    const tdr = document.createElement("td");
+    tdr.append((r.rate * 100).toFixed(0) + "%");
+    const bar = document.createElement("span"); bar.className = "rate"; bar.style.width = Math.round(r.rate * 80) + "px"; tdr.append(bar);
+    tr.append(tdr);
+    const tdw = document.createElement("td");
+    tdw.textContent = Object.keys(r.wrong).map((k) => k + " " + r.wrong[k]).join(" / ");
+    tr.append(tdw);
+    bc.append(tr);
+  });
+
+  const bu = $("byUser"); bu.innerHTML = "";
+  docs.forEach((d, i) => {
+    const a = d.a || {};
+    const tr = document.createElement("tr");
+    const when = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString("ja-JP") : "";
+    [when, d.nick || "(無記名)", scores[i] + "/" + total].forEach((v, k) => { const td = document.createElement("td"); if (k === 2) td.className = "n"; td.textContent = v; tr.append(td); });
+    const td = document.createElement("td");
+    const miss = NAMES.filter((n) => a[n] !== KEY[n]);
+    if (!miss.length) td.textContent = "全問正解";
+    else {
+      const det = document.createElement("details");
+      const s = document.createElement("summary"); s.textContent = miss.length + "人"; det.append(s);
+      const ul = document.createElement("ul");
+      miss.forEach((n) => { const li = document.createElement("li"); li.textContent = n + ":" + (a[n] || "未回答") + "(正解 " + KEY[n] + ")"; ul.append(li); });
+      det.append(ul); td.append(det);
+    }
+    tr.append(td); bu.append(tr);
+  });
+  $("out").hidden = false;
+  $("copy").hidden = !docs.length;
+}
+
+$("copy").addEventListener("click", async () => {
+  const head = ["日時", "ニックネーム", "正解数"].concat(NAMES);
+  const lines = [head.join("\t")];
+  docs.forEach((d) => {
+    const a = d.a || {};
+    const when = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString("ja-JP") : "";
+    lines.push([when, (d.nick || "").replace(/[\t\n]/g, " "), scoreOf(a)].concat(NAMES.map((n) => a[n] || "")).join("\t"));
+  });
+  lines.splice(1, 0, ["正解", "", ""].concat(NAMES.map((n) => KEY[n])).join("\t"));
+  try { await navigator.clipboard.writeText(lines.join("\n")); msg("コピーしました。スプレッドシートに貼り付けられます。"); }
+  catch (e) { msg("コピーできませんでした。", true); }
+});
+</script>
+</body>
+</html>

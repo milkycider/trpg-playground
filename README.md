@@ -9,7 +9,10 @@ trpg-playground/
 ├─ index.html          トップページ(各コンテンツへのリンク一覧)
 ├─ README.md
 └─ gender-quiz/
-    └─ index.html      探索者の性別クイズ
+    ├─ index.html          探索者の性別クイズ
+    ├─ firebase-config.js  回答の送信先(Firebase)の設定
+    └─ admin/
+        └─ index.html      回答の集計ページ(管理用)
 ```
 
 コンテンツごとにフォルダを作り、中身を `index.html` にします。
@@ -33,3 +36,17 @@ trpg-playground/
 - 公開すると、URLを知っている人は誰でも開けます。ページのソースを見れば、クイズの答えも読めます。
 - 各ページには `<meta name="robots" content="noindex">` を入れています。検索エンジンに載りにくくなりますが、見られないようにするものではありません。
 - シナリオのネタバレになるデータは置かないでください。
+
+## 性別クイズの回答を集める(任意)
+
+答え合わせを押すと同時に、回答がFirestoreに保存され、共有用のURL(`gender-quiz/?r=<ID>`)が作られます。
+Xに共有したURLを開くと、その人の結果(点数と正答率)が表示されます。回答の中身は「この人の回答を見る」を押したときだけ出ます。
+`gender-quiz/firebase-config.js` が `null` のままなら、保存も共有URLも無効です。
+
+1. Firebase コンソールでプロジェクトを作り、Firestore Database を作る
+2. 「ルール」に、別ファイルの `firestore.rules` の中身を貼って公開する(メールアドレスを自分のものに書き換える)
+3. プロジェクトの設定 → マイアプリ → ウェブアプリを追加し、出てきた `firebaseConfig` を `firebase-config.js` に貼る
+4. Authentication → ログイン方法で Google を有効にする。設定 → 承認済みドメインに `<ユーザー名>.github.io` を足す
+5. push して公開する。全員ぶんの集計は `https://<ユーザー名>.github.io/trpg-playground/gender-quiz/admin/` で、ルールに書いたアカウントでログインして見る
+
+共有URLのIDは推測できない長い文字列です。URLを知っている人は、その結果を開けます。
