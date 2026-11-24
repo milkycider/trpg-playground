@@ -4,5 +4,5 @@ window.FIREBASE_CONFIG = {
   projectId: "trpg-playground",
   storageBucket: "trpg-playground.firebasestorage.app",
   messagingSenderId: "41114062992",
-  appId: "1:41114062992:web:3102f1722380234dd94815
+  appId: "1:41114062992:web:3102f1722380234dd94815"
 };
